@@ -19,13 +19,15 @@ function render() {
     const time = document.createElement('time')
     time.dateTime = alert.date
     time.textContent = dateFormat.format(new Date(alert.date + 'T12:00:00Z'))
+    const system = document.createElement('span')
+    system.textContent = alert.system === 'RSO' ? 'RSO · ' : 'RCB · '
     const title = document.createElement('h3')
     title.textContent = alert.title
     const source = document.createElement('a')
     source.href = alert.source
     source.textContent = 'Źródło'
-    source.setAttribute('aria-label', 'Źródło na gov.pl — ' + alert.title)
-    item.append(time, title, source)
+    source.setAttribute('aria-label', 'Źródło — ' + alert.title)
+    item.append(system, time, title, source)
     return item
   }))
   more.hidden = visible >= alerts.length
@@ -39,8 +41,8 @@ async function loadAlerts() {
     const data = await response.json()
     alerts = data.alerts
     applicationKey = data.pushKey
-    status.textContent = !data.lastSync ? 'Czekam na pierwszą synchronizację z RCB.'
-      : !alerts.length ? 'Nie znaleziono jeszcze alertów w pobranych publikacjach.'
+    status.textContent = !data.lastSync ? 'Czekam na pierwszą synchronizację.'
+      : !alerts.length ? 'Brak komunikatów z ostatnich 5 dni.'
       : `${alerts.length} alertów · Sprawdzono ${timeFormat.format(new Date(data.lastSync))}`
     render()
   } catch {

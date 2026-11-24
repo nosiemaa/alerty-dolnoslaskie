@@ -2,10 +2,12 @@ const { randomUUID, timingSafeEqual } = require('node:crypto')
 const push = require('web-push')
 const { store, records, write, remove, digest } = require('../lib/store')
 const { home, sitemap, download, links, parseAlert } = require('../lib/source')
+const { getRso } = require('../lib/rso')
+const { cutoffDate } = require('../lib/retention')
 
 const day = 86_400_000
 
-async function discover(deadline) {
+async function discover(deadline, cutoff) {
   const sources = await Promise.allSettled([download(home), download(sitemap)])
   const recent = sources[0].status === 'fulfilled' ? links(sources[0].value) : []
   const archive = sources[1].status === 'fulfilled' ? links(sources[1].value).reverse() : []
@@ -32,10 +34,7 @@ async function discover(deadline) {
         await write('checked', id, -now)
         throw error
       }
-      const date = new Date(alert?.date + 'T00:00:00Z').getTime()
-      const pending = alert && date >= now - 2 * day && date <= now + day
-        ? { ...alert, expires: now + day } : null
-      await store('save_alert', { id, alert, pending, now })
+      await saveAlert(id, alert?.date >= cutoff ? alert : null, now)
     }))
     failed += results.filter(result => result.status === 'rejected').length
   }
@@ -43,7 +42,33 @@ async function discover(deadline) {
   return { candidates: urls.length, failed, partial: sources.some(result => result.status === 'rejected') }
 }
 
-async function sendPending(deadline) {
+function saveAlert(id, alert, now) {
+  const pending = alert?.date >= cutoffDate(now, 2) && alert.date <= cutoffDate(now)
+    ? { ...alert, expires: now + day } : null
+  return store('save_alert', { id, alert, pending, now })
+}
+
+async function discoverRso(cutoff, deadline) {
+  const alerts = await getRso(cutoff, deadline)
+  const now = Date.now()
+  for (let start = 0; start < alerts.length; start += 8) {
+    if (Date.now() >= deadline) throw new Error('Nie udało się zapisać wszystkich komunikatów RSO')
+    await Promise.all(alerts.slice(start, start + 8).map(alert =>
+      saveAlert(digest(alert.source), alert, now)))
+  }
+  return alerts.length
+}
+
+async function deleteExpired(cutoff) {
+  const archive = await records('alerts')
+  const expired = Object.keys(archive).filter(id => archive[id].date < cutoff)
+  for (let start = 0; start < expired.length; start += 8) {
+    await Promise.all(expired.slice(start, start + 8).map(id => remove('alerts', id)))
+  }
+  return expired.length
+}
+
+async function sendPending(deadline, cutoff) {
   const pending = await records('pending')
   if (!Object.keys(pending).length) return 0
   const { VAPID_SUBJECT, VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY } = process.env
@@ -52,7 +77,7 @@ async function sendPending(deadline) {
   let sent = 0
   for (const [id, alert] of Object.entries(pending)) {
     if (Date.now() >= deadline) break
-    if (Date.now() >= alert.expires) {
+    if (Date.now() >= alert.expires || alert.date < cutoff) {
       await store('finish_alert', { id })
       continue
     }
@@ -68,7 +93,8 @@ async function sendPending(deadline) {
       const failures = await Promise.allSettled(remaining.slice(start, start + 15).map(async ([subscriber, value]) => {
         try {
           await push.sendNotification(value, JSON.stringify({
-            id, title: 'Nowy Alert RCB', body: alert.title, source: alert.source
+            id, title: alert.system === 'RSO' ? 'Nowy komunikat RSO' : 'Nowy Alert RCB',
+            body: alert.title, source: alert.source
           }), { TTL: 3600, topic: id.slice(0, 32), timeout: 4500 })
         } catch (error) {
           if ([404, 410].includes(error.statusCode)) {
@@ -99,11 +125,19 @@ module.exports = async (req, res) => {
   try {
     if (!await store('lock', { token: lock })) return res.json({ busy: true })
     try {
-      const discovery = await Promise.allSettled([discover(started + 27_000)])
-      const sent = await sendPending(started + 45_000)
-      if (discovery[0].status === 'rejected') throw discovery[0].reason
-      await write('sync', 'last', new Date().toISOString())
-      res.json({ ...discovery[0].value, sent })
+      const cutoff = cutoffDate(started)
+      const [rcb, rso, cleanup] = await Promise.allSettled([
+        discover(started + 27_000, cutoff),
+        discoverRso(cutoff, started + 27_000),
+        deleteExpired(cutoff)
+      ])
+      const sent = await sendPending(started + 45_000, cutoff)
+      if (rcb.status === 'fulfilled' || rso.status === 'fulfilled') {
+        await write('sync', 'last', new Date().toISOString())
+      }
+      const failure = [rcb, rso, cleanup].find(result => result.status === 'rejected')
+      if (failure) throw failure.reason
+      res.json({ rcb: rcb.value, rso: rso.value, removed: cleanup.value, sent })
     } finally {
       await store('unlock', { token: lock })
     }
