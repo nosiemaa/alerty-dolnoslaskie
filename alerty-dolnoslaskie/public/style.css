@@ -22,7 +22,8 @@ h2 { font-size: 1.35rem; letter-spacing: -.025em; }
 main { padding-block: 1.35rem 2.5rem; }
 .push, .archive-header { display: flex; align-items: center; justify-content: space-between; gap: .9rem 1.2rem; flex-wrap: wrap; }
 .push { background: #fff; border: 1px solid #cbdadc; border-radius: .9rem; padding: 1.1rem; margin-bottom: 2rem; }
-.push > div { flex: 1 1 16rem; }
+.push > div:first-child { flex: 1 1 16rem; }
+.push-actions { display: flex; flex-wrap: wrap; gap: .5rem; }
 #push-status, #sync-status, footer { color: #48636a; }
 button {
   cursor: pointer;

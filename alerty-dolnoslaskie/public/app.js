@@ -2,6 +2,7 @@ const list = document.querySelector('#alerts')
 const status = document.querySelector('#sync-status')
 const pushStatus = document.querySelector('#push-status')
 const toggle = document.querySelector('#push-toggle')
+const testButton = document.querySelector('#push-test')
 const refresh = document.querySelector('#refresh')
 const more = document.querySelector('#more')
 const dateFormat = new Intl.DateTimeFormat('pl-PL', { dateStyle: 'long', timeZone: 'Europe/Warsaw' })
@@ -82,9 +83,42 @@ async function setupPush() {
 function updateToggle() {
   toggle.disabled = false
   toggle.textContent = enabled ? 'Wyłącz powiadomienia' : 'Włącz powiadomienia'
+  testButton.hidden = !enabled
   pushStatus.textContent = enabled ? 'Powiadomienia są włączone na tym urządzeniu.'
     : 'Otrzymuj powiadomienia o nowych publikacjach także po zamknięciu aplikacji.'
 }
+
+testButton.addEventListener('click', async () => {
+  testButton.disabled = true
+  toggle.disabled = true
+  try {
+    const subscription = await registration.pushManager.getSubscription()
+    if (!subscription) {
+      enabled = false
+      updateToggle()
+      throw new Error('Włącz powiadomienia, żeby wysłać test.')
+    }
+    const response = await fetch('/api/subscription', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ...subscription.toJSON(), action: 'test' })
+    })
+    if (response.status === 429) throw new Error('Odczekaj minutę przed kolejnym testem.')
+    if (response.status === 410) {
+      await subscription.unsubscribe()
+      enabled = false
+      updateToggle()
+      throw new Error('Subskrypcja wygasła. Włącz powiadomienia ponownie.')
+    }
+    if (!response.ok) throw new Error('Test się nie udał. Odśwież stronę i spróbuj ponownie.')
+    pushStatus.textContent = 'Wysłano test. Sprawdź powiadomienia telefonu.'
+  } catch (error) {
+    pushStatus.textContent = error.message
+  } finally {
+    testButton.disabled = false
+    toggle.disabled = false
+  }
+})
 
 async function saveSubscription(method, subscription) {
   const response = await fetch('/api/subscription', {
