@@ -5,7 +5,7 @@ Instalowalna aplikacja webowa w języku polskim. Pokazuje publikacje RCB dotycz�
 ## Publikacja przez GitHub i Vercel
 
 1. Utwórz repozytorium na GitHubie i wgraj całą zawartość tego katalogu, włącznie z ukrytym katalogiem `.github`. Workflow musi być na domyślnej gałęzi repozytorium.
-2. Utwórz bazę Upstash Redis. Z jej panelu skopiuj wartości REST URL i REST Token. W Vercel wybierz **Add New → Project**, wskaż repozytorium i upewnij się, że katalog projektu to ten zawierający `vercel.json`.
+2. Utwórz projekt na planie Free w Supabase. Otwórz **SQL Editor → New query**, wklej cały plik `supabase.sql` i kliknij **Run**. Skopiuj adres **Project URL** i klucz **Secret key** zaczynający się od `sb_secret_`. W Vercel wybierz **Add New → Project**, wskaż repozytorium i upewnij się, że katalog projektu to ten zawierający `vercel.json`.
 3. Wygeneruj własne klucze push. Uruchom w katalogu projektu polecenia:
 
    ```sh
@@ -18,14 +18,14 @@ Instalowalna aplikacja webowa w języku polskim. Pokazuje publikacje RCB dotycz�
 
    | Zmienna | Wartość |
    | --- | --- |
-   | `UPSTASH_REDIS_REST_URL` | REST URL z Upstash |
-   | `UPSTASH_REDIS_REST_TOKEN` | REST Token z Upstash |
+   | `SUPABASE_URL` | Project URL z Supabase |
+   | `SUPABASE_SECRET_KEY` | Secret key z Supabase |
    | `VAPID_PUBLIC_KEY` | `publicKey` z generatora |
    | `VAPID_PRIVATE_KEY` | `privateKey` z generatora |
    | `VAPID_SUBJECT` | Twój adres kontaktowy w formacie `mailto:adres@example.com` |
    | `CRON_SECRET` | Losowy ciąg z ostatniego polecenia |
 
-   Wdróż aplikację i zapisz jej publiczny adres produkcyjny HTTPS. Klucz prywatny, token Redis i sekret synchronizacji trzymaj w ustawieniach usług. Zachowaj klucze VAPID przy kolejnych wdrożeniach, ponieważ telefon wiąże subskrypcję z kluczem publicznym.
+   Wdróż aplikację i zapisz jej publiczny adres produkcyjny HTTPS. Klucz prywatny, klucz Supabase i sekret synchronizacji trzymaj w ustawieniach usług. Zachowaj klucze VAPID przy kolejnych wdrożeniach, ponieważ telefon wiąże subskrypcję z kluczem publicznym.
 
 5. W GitHubie otwórz **Settings → Secrets and variables → Actions**. W **Variables** dodaj `APP_URL` z adresem produkcyjnym Vercel. W **Secrets** dodaj `CRON_SECRET` z tą samą wartością co na Vercel.
 6. Otwórz **Actions → Sprawdź nowe alerty → Run workflow**. Po udanym uruchomieniu odśwież aplikację. Harmonogram sprawdza RCB co pięć minut, a starsze komunikaty dochodzą partiami po kolejnych uruchomieniach. W repozytorium trzeba mieć włączone GitHub Actions.
@@ -35,7 +35,7 @@ Instalowalna aplikacja webowa w języku polskim. Pokazuje publikacje RCB dotycz�
 - **Android** — otwórz adres w Chrome, opcjonalnie wybierz instalację z menu przeglądarki, a następnie w aplikacji wybierz **Włącz powiadomienia** i zaakceptuj zgodę.
 - **iPhone i iPad (iOS/iPadOS 16.4+)** — w Safari wybierz **Udostępnij → Do ekranu początkowego**. Otwórz aplikację z nowej ikony, wybierz **Włącz powiadomienia** i zaakceptuj zgodę.
 
-Po pojawieniu się nowego komunikatu objętego zasięgiem synchronizacja zapisze go i wyśle powiadomienie. Dotknięcie powiadomienia otwiera komunikat na gov.pl. Wyłączenie zgody w aplikacji usuwa subskrypcję z Redis.
+Po pojawieniu się nowego komunikatu objętego zasięgiem synchronizacja zapisze go i wyśle powiadomienie. Dotknięcie powiadomienia otwiera komunikat na gov.pl. Wyłączenie zgody w aplikacji usuwa subskrypcję z bazy.
 
 ## Zasięg i częstotliwość
 

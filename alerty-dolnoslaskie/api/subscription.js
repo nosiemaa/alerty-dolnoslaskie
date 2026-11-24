@@ -1,5 +1,5 @@
 const { ECDH } = require('node:crypto')
-const { redis, keys, digest } = require('../lib/store')
+const { write, remove, digest } = require('../lib/store')
 
 function subscriptionFrom(body) {
   const endpoint = body?.endpoint
@@ -24,7 +24,7 @@ module.exports = async (req, res) => {
   const id = digest(subscription.endpoint)
   try {
     if (req.method === 'DELETE') {
-      await redis('HDEL', keys.subscriptions, id)
+      await remove('subscriptions', id)
     } else {
       const { auth, p256dh } = req.body.keys || {}
       if (!/^[\w-]{22}$/.test(auth || '') || !/^[\w-]{87}$/.test(p256dh || '')) return res.status(400).end()
@@ -33,7 +33,7 @@ module.exports = async (req, res) => {
       } catch {
         return res.status(400).end()
       }
-      await redis('HSET', keys.subscriptions, id, JSON.stringify({ ...subscription, keys: { auth, p256dh } }))
+      await write('subscriptions', id, { ...subscription, keys: { auth, p256dh } })
     }
     res.status(204).end()
   } catch {

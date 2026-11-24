@@ -1,30 +1,22 @@
 const { createHash } = require('node:crypto')
 
-const prefix = 'rcb-dolnoslaskie:v1:'
-const keys = Object.fromEntries(
-  ['checked', 'alerts', 'subscriptions', 'pending', 'sync', 'lock'].map(name => [name, prefix + name])
-)
-
 const digest = value => createHash('sha256').update(value).digest('hex')
 
-async function redis(...command) {
-  const { UPSTASH_REDIS_REST_URL: url, UPSTASH_REDIS_REST_TOKEN: token } = process.env
-  if (!url || !token) throw new Error('Brak konfiguracji Redis')
-  const response = await fetch(url, {
+async function store(operation, data = {}) {
+  const { SUPABASE_URL: url, SUPABASE_SECRET_KEY: key } = process.env
+  if (!url || !key) throw new Error('Brak konfiguracji Supabase')
+  const response = await fetch(new URL('/rest/v1/rpc/rcb_storage', url), {
     method: 'POST',
-    headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-    body: JSON.stringify(command),
+    headers: { apikey: key, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ operation, data }),
     signal: AbortSignal.timeout(5000)
   })
-  if (!response.ok) throw new Error(`Redis HTTP ${response.status}`)
-  const { result, error } = await response.json()
-  if (error) throw new Error('Polecenie Redis nie powiodło się')
-  return result
+  if (!response.ok) throw new Error(`Supabase HTTP ${response.status}`)
+  return response.json()
 }
 
-async function hash(key) {
-  const pairs = await redis('HGETALL', key)
-  return Object.fromEntries(Array.from({ length: pairs.length / 2 }, (_, i) => [pairs[2 * i], pairs[2 * i + 1]]))
-}
+const records = group => store('list', { group })
+const write = (group, id, value) => store('write', { group, id, value })
+const remove = (group, id) => store('remove', { group, id })
 
-module.exports = { redis, hash, keys, digest }
+module.exports = { store, records, write, remove, digest }

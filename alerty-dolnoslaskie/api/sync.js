@@ -1,25 +1,16 @@
 const { randomUUID, timingSafeEqual } = require('node:crypto')
 const push = require('web-push')
-const { redis, hash, keys, digest } = require('../lib/store')
+const { store, records, write, remove, digest } = require('../lib/store')
 const { home, sitemap, download, links, parseAlert } = require('../lib/source')
 
 const day = 86_400_000
-const atomicSave = `
-  if ARGV[2] ~= '' then
-    local fresh = redis.call('HSET', KEYS[2], ARGV[1], ARGV[2])
-    if fresh == 1 and ARGV[3] ~= '' then
-      redis.call('HSET', KEYS[3], ARGV[1], ARGV[3])
-    end
-  end
-  return redis.call('HSET', KEYS[1], ARGV[1], ARGV[4])
-`
 
 async function discover(deadline) {
   const sources = await Promise.allSettled([download(home), download(sitemap)])
   const recent = sources[0].status === 'fulfilled' ? links(sources[0].value) : []
   const archive = sources[1].status === 'fulfilled' ? links(sources[1].value).reverse() : []
   if (!recent.length && !archive.length) throw new Error('Nie udało się odczytać indeksu RCB')
-  const checked = await hash(keys.checked)
+  const checked = await records('checked')
   const now = Date.now()
   const urls = [...new Set([...recent, ...archive])]
   const unvisited = urls.filter(url => !checked[digest(url)])
@@ -38,14 +29,13 @@ async function discover(deadline) {
       try {
         alert = parseAlert(await download(url), url)
       } catch (error) {
-        await redis('HSET', keys.checked, id, -now)
+        await write('checked', id, -now)
         throw error
       }
       const date = new Date(alert?.date + 'T00:00:00Z').getTime()
       const pending = alert && date >= now - 2 * day && date <= now + day
-        ? JSON.stringify({ ...alert, expires: now + day }) : ''
-      await redis('EVAL', atomicSave, 3, keys.checked, keys.alerts, keys.pending,
-        id, alert ? JSON.stringify(alert) : '', pending, now)
+        ? { ...alert, expires: now + day } : null
+      await store('save_alert', { id, alert, pending, now })
     }))
     failed += results.filter(result => result.status === 'rejected').length
   }
@@ -54,21 +44,20 @@ async function discover(deadline) {
 }
 
 async function sendPending(deadline) {
-  const pending = await hash(keys.pending)
+  const pending = await records('pending')
   if (!Object.keys(pending).length) return 0
   const { VAPID_SUBJECT, VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY } = process.env
   push.setVapidDetails(VAPID_SUBJECT, VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY)
-  const subscriptions = Object.entries(await hash(keys.subscriptions))
+  const subscriptions = Object.entries(await records('subscriptions'))
   let sent = 0
-  for (const [id, record] of Object.entries(pending)) {
+  for (const [id, alert] of Object.entries(pending)) {
     if (Date.now() >= deadline) break
-    const alert = JSON.parse(record)
     if (Date.now() >= alert.expires) {
-      await redis('HDEL', keys.pending, id)
+      await store('finish_alert', { id })
       continue
     }
-    const sentKey = keys.pending + ':' + id
-    const delivered = await hash(sentKey)
+    const sentGroup = 'sent:' + id
+    const delivered = await records(sentGroup)
     const remaining = subscriptions.filter(([subscriber]) => !delivered[subscriber])
     let complete = true
     for (let start = 0; start < remaining.length; start += 15) {
@@ -78,22 +67,22 @@ async function sendPending(deadline) {
       }
       const failures = await Promise.allSettled(remaining.slice(start, start + 15).map(async ([subscriber, value]) => {
         try {
-          await push.sendNotification(JSON.parse(value), JSON.stringify({
+          await push.sendNotification(value, JSON.stringify({
             id, title: 'Nowy Alert RCB', body: alert.title, source: alert.source
           }), { TTL: 3600, topic: id.slice(0, 32), timeout: 4500 })
         } catch (error) {
           if ([404, 410].includes(error.statusCode)) {
-            await redis('HDEL', keys.subscriptions, subscriber)
+            await remove('subscriptions', subscriber)
             return
           }
           throw error
         }
-        await redis('EVAL', "redis.call('HSET', KEYS[1], ARGV[1], '1'); return redis.call('EXPIRE', KEYS[1], 172800)", 1, sentKey, subscriber)
+        await write(sentGroup, subscriber, true)
         sent++
       }))
       if (failures.some(result => result.status === 'rejected')) complete = false
     }
-    if (complete) await redis('HDEL', keys.pending, id)
+    if (complete) await store('finish_alert', { id })
   }
   return sent
 }
@@ -108,15 +97,15 @@ module.exports = async (req, res) => {
   const lock = randomUUID()
   const started = Date.now()
   try {
-    if (await redis('SET', keys.lock, lock, 'NX', 'EX', 65) !== 'OK') return res.json({ busy: true })
+    if (!await store('lock', { token: lock })) return res.json({ busy: true })
     try {
       const discovery = await Promise.allSettled([discover(started + 27_000)])
       const sent = await sendPending(started + 45_000)
       if (discovery[0].status === 'rejected') throw discovery[0].reason
-      await redis('SET', keys.sync, new Date().toISOString())
+      await write('sync', 'last', new Date().toISOString())
       res.json({ ...discovery[0].value, sent })
     } finally {
-      await redis('EVAL', "if redis.call('GET', KEYS[1]) == ARGV[1] then return redis.call('DEL', KEYS[1]) end", 1, keys.lock, lock)
+      await store('unlock', { token: lock })
     }
   } catch (error) {
     console.error('Synchronizacja RCB:', error.message)
