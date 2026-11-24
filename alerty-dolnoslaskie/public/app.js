@@ -14,6 +14,8 @@ let visible = 20
 let applicationKey
 let registration
 let enabled = false
+let loading = false
+let lastFeed = ''
 
 pushMenu.addEventListener('click', () => pushDialog.showModal())
 pushDialog.addEventListener('click', event => {
@@ -45,20 +47,33 @@ function render() {
 }
 
 async function loadAlerts() {
+  if (loading) return
+  loading = true
   refresh.disabled = true
+  const controller = new AbortController()
+  const timeout = setTimeout(() => controller.abort(), 12_000)
   try {
-    const response = await fetch('/api/alerts')
+    const response = await fetch('/api/alerts', { signal: controller.signal })
     if (!response.ok) throw new Error()
     const data = await response.json()
-    alerts = data.alerts
     applicationKey = data.pushKey
+    const syncTime = Date.parse(data.lastSync)
     status.textContent = !data.lastSync ? 'Czekam na pierwszą synchronizację.'
-      : !alerts.length ? 'Brak komunikatów z ostatnich 5 dni.'
-      : `${alerts.length} alertów · Sprawdzono ${timeFormat.format(new Date(data.lastSync))}`
-    render()
+      : `${data.alerts.length ? data.alerts.length + ' alertów' : 'Brak alertów z ostatnich 5 dni'} · Sprawdzono ${timeFormat.format(syncTime)}`
+    if (Number.isFinite(syncTime) && Date.now() - syncTime > 5 * 60_000) {
+      status.textContent += ' · Synchronizacja opóźniona'
+    }
+    const feed = JSON.stringify(data.alerts)
+    if (feed !== lastFeed) {
+      alerts = data.alerts
+      lastFeed = feed
+      render()
+    }
   } catch {
     status.textContent = alerts.length ? 'Nie udało się odświeżyć zapisanej listy.' : 'Nie udało się pobrać alertów. Spróbuj ponownie.'
   } finally {
+    clearTimeout(timeout)
+    loading = false
     refresh.disabled = false
   }
 }
@@ -167,6 +182,13 @@ toggle.addEventListener('click', async () => {
 
 more.addEventListener('click', () => { visible += 20; render() })
 refresh.addEventListener('click', loadAlerts)
+setInterval(() => {
+  if (!document.hidden) loadAlerts()
+}, 20_000)
+document.addEventListener('visibilitychange', () => {
+  if (!document.hidden) loadAlerts()
+})
+window.addEventListener('online', loadAlerts)
 
 const worker = 'serviceWorker' in navigator
   ? navigator.serviceWorker.register('/sw.js').then(() => navigator.serviceWorker.ready).catch(() => null)
