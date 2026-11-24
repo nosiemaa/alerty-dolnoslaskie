@@ -1,0 +1,23 @@
+name: Sprawdź nowe alerty
+on:
+  schedule:
+    - cron: '3-58/5 * * * *'
+  workflow_dispatch:
+permissions: {}
+concurrency:
+  group: rcb-sync
+  cancel-in-progress: false
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - name: Uruchom synchronizację na Vercel
+        env:
+          APP_URL: ${{ vars.APP_URL }}
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+        run: |
+          test -n "$APP_URL" && test -n "$CRON_SECRET" || exit 1
+          curl --fail-with-body --silent --show-error --max-time 65 \
+            --header "Authorization: Bearer $CRON_SECRET" \
+            "${APP_URL%/}/api/sync"
