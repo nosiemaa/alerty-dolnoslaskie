@@ -1,0 +1,8 @@
+{
+  "name": "alerty-dolnoslaskie",
+  "version": "1.0.0",
+  "private": true,
+  "engines": { "node": "22.x" },
+  "dependencies": { "cheerio": "1.1.2", "web-push": "3.6.7" },
+  "scripts": { "test": "node --test", "keys": "web-push generate-vapid-keys --json" }
+}
