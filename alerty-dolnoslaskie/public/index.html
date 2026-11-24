@@ -2,7 +2,7 @@
 <html lang="pl">
   <head>
     <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
     <meta name="theme-color" content="#112e38">
     <meta name="description" content="Alerty RCB z województwa dolnośląskiego z odnośnikami do gov.pl.">
     <title>Alerty Dolnośląskie</title>
@@ -14,24 +14,19 @@
   </head>
   <body>
     <header>
-      <div class="wrap">
-        <p class="region">WOJEWÓDZTWO DOLNOŚLĄSKIE</p>
-        <h1>Alerty RCB i RSO</h1>
-        <p class="intro">Komunikaty Rządowego Centrum Bezpieczeństwa i Regionalnego Systemu Ostrzegania.</p>
+      <div class="wrap header-content">
+        <div>
+          <p class="region">WOJEWÓDZTWO DOLNOŚLĄSKIE</p>
+          <h1>Alerty RCB i RSO</h1>
+          <p class="intro">Komunikaty Rządowego Centrum Bezpieczeństwa i Regionalnego Systemu Ostrzegania.</p>
+        </div>
+        <button class="menu-button" id="push-menu" type="button" aria-label="Ustawienia powiadomień" aria-haspopup="dialog" aria-controls="push-dialog">
+          <span aria-hidden="true">⋮</span>
+        </button>
       </div>
     </header>
     <main class="wrap">
-      <section class="push" aria-labelledby="push-heading">
-        <div>
-          <h2 id="push-heading">Powiadomienia na telefon</h2>
-          <p id="push-status" role="status">Sprawdzam dostępność powiadomień…</p>
-        </div>
-        <div class="push-actions">
-          <button id="push-toggle" disabled>Włącz powiadomienia</button>
-          <button id="push-test" class="refresh" type="button" hidden>Test powiadomienia</button>
-        </div>
-      </section>
-      <section aria-labelledby="archive-heading">
+      <section class="archive" aria-labelledby="archive-heading">
         <div class="archive-header">
           <div>
             <h2 id="archive-heading">Alerty z ostatnich 5 dni</h2>
@@ -39,10 +34,25 @@
           </div>
           <button class="refresh" id="refresh" type="button">Odśwież</button>
         </div>
-        <ul id="alerts" class="alerts"></ul>
-        <button class="refresh" id="more" type="button" hidden>Pokaż więcej alertów</button>
+        <div class="alert-scroll" tabindex="0" role="region" aria-label="Lista alertów">
+          <ul id="alerts" class="alerts"></ul>
+          <button class="refresh" id="more" type="button" hidden>Pokaż więcej alertów</button>
+        </div>
       </section>
-      <footer>Niezależna aplikacja. Oficjalne ostrzeżenia RCB są wysyłane przez operatorów SMS-em. Publikacje na gov.pl mogą pojawiać się później.</footer>
     </main>
+    <dialog class="push" id="push-dialog" aria-labelledby="push-heading">
+      <div class="dialog-header">
+        <h2 id="push-heading">Powiadomienia na telefon</h2>
+        <form method="dialog">
+          <button class="close-button refresh" type="submit" aria-label="Zamknij" autofocus>×</button>
+        </form>
+      </div>
+      <p id="push-status" role="status">Sprawdzam dostępność powiadomień…</p>
+      <div class="push-actions">
+        <button id="push-toggle" type="button" disabled>Włącz powiadomienia</button>
+        <button id="push-test" class="refresh" type="button" hidden>Test powiadomienia</button>
+      </div>
+      <p class="notice">Oficjalne ostrzeżenia RCB przychodzą SMS-em. Publikacje na gov.pl mogą pojawiać się później.</p>
+    </dialog>
   </body>
 </html>

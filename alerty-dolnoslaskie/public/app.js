@@ -3,6 +3,8 @@ const status = document.querySelector('#sync-status')
 const pushStatus = document.querySelector('#push-status')
 const toggle = document.querySelector('#push-toggle')
 const testButton = document.querySelector('#push-test')
+const pushMenu = document.querySelector('#push-menu')
+const pushDialog = document.querySelector('#push-dialog')
 const refresh = document.querySelector('#refresh')
 const more = document.querySelector('#more')
 const dateFormat = new Intl.DateTimeFormat('pl-PL', { dateStyle: 'long', timeZone: 'Europe/Warsaw' })
@@ -12,6 +14,14 @@ let visible = 20
 let applicationKey
 let registration
 let enabled = false
+
+pushMenu.addEventListener('click', () => pushDialog.showModal())
+pushDialog.addEventListener('click', event => {
+  if (event.target !== pushDialog) return
+  const bounds = pushDialog.getBoundingClientRect()
+  if (event.clientX < bounds.left || event.clientX > bounds.right ||
+      event.clientY < bounds.top || event.clientY > bounds.bottom) pushDialog.close()
+})
 
 function render() {
   list.replaceChildren(...alerts.slice(0, visible).map(alert => {
